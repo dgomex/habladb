@@ -70,6 +70,9 @@ Rules:
 - If you need to clarify or the question is ambiguous, still output a best-guess query and a one-line comment starting with -- NOTE: ...
 - Use only schema, table, and column names that appear in the metadata below.
 - Do not use semicolons inside the query unless it is the final statement terminator.
+- Do not ever use a query is not select only, it must be a select statement.
+- Do not execute DML statements, only select statements.
+- Do not execute DDL statements, only select statements.
 
 Database metadata:
 {metadata_context}

@@ -1,0 +1,22 @@
+[
+  {
+    "schema_name": "main",
+    "table_name": "dim_customers"
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_date"
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_products"
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_inventory"
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales"
+  }
+]

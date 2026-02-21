@@ -1,10 +1,10 @@
 # HablaDB — Chat to SQL
 
-HablaDB lets you query **Redshift** and **PostgreSQL** databases using natural language. A Streamlit chat UI sends your question and database metadata to an LLM (OpenAI, Anthropic, Groq, or Gemini via [LiteLLM](https://docs.litellm.ai/)); the generated SQL is shown and executed, and results are displayed in the app.
+HablaDB lets you query **PostgreSQL**, **Redshift**, and **DuckDB** databases using natural language. A Streamlit chat UI sends your question and database metadata to an LLM (OpenAI, Anthropic, Groq, or Gemini via [LiteLLM](https://docs.litellm.ai/)); the generated SQL is shown and executed, and results are displayed in the app.
 
 ## Features
 
-- **Connection management**: Discover connections from `HABLADB_CONN_*` environment variables; add new ones via the UI with validation and persistence to `.env`.
+- **Connection management**: Discover connections from `HABLADB_CONN_*` environment variables; add new ones via the UI (PostgreSQL/Redshift connection string or DuckDB file path) with validation and persistence to `.env`.
 - **Metadata harvesting (RAG)**: Catalog schemas, tables, columns (and descriptions where supported); store under `databases/` and inject into the LLM context for accurate SQL generation.
 - **Conversational UI**: Choose active connection, LLM provider, and model in the sidebar; chat thread with expandable SQL and result dataframes; graceful error handling for invalid SQL and timeouts.
 
@@ -24,7 +24,8 @@ HablaDB lets you query **Redshift** and **PostgreSQL** databases using natural l
    Copy `.env.example` to `.env` and set at least:
 
    - One database connection, e.g.  
-     `HABLADB_CONN_MYDB=postgresql+psycopg2://user:password@host:5432/dbname`
+     `HABLADB_CONN_MYDB=postgresql://user:password@host:5432/dbname`  
+     or add a **DuckDB** connection in the UI by choosing "DuckDB" and entering the path to your `.duckdb` file.
    - For Redshift use the same URL form with your cluster endpoint and port (e.g. 5439).
    - The API key for your chosen LLM provider:  
      `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, or `GEMINI_API_KEY`.
@@ -40,7 +41,7 @@ HablaDB lets you query **Redshift** and **PostgreSQL** databases using natural l
 1. **Sidebar**
    - **Active connection**: Select the database to query (from `.env` or added in the UI).
    - **LLM provider / Model**: Choose provider and model for text-to-SQL.
-   - **Add connection**: Name + SQLAlchemy connection string; validated before saving to `.env`.
+   - **Add connection**: Name + either a **PostgreSQL/Redshift** connection string or **DuckDB** path to a `.duckdb` file; validated before saving to `.env`.
    - **Harvest metadata**: After selecting a connection, click to refresh schema/table/column metadata into `databases/{conn_name}_*.json`. Do this at least once per connection (and after schema changes) for good SQL generation.
 
 2. **Chat**

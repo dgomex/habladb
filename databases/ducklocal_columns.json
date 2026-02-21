@@ -1,0 +1,177 @@
+[
+  {
+    "schema_name": "main",
+    "table_name": "dim_customers",
+    "column_name": "customer_id",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_customers",
+    "column_name": "name",
+    "data_type": "VARCHAR",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_customers",
+    "column_name": "email",
+    "data_type": "VARCHAR",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_customers",
+    "column_name": "city",
+    "data_type": "VARCHAR",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_customers",
+    "column_name": "signup_date",
+    "data_type": "DATE",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_date",
+    "column_name": "date_key",
+    "data_type": "DATE",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_date",
+    "column_name": "year",
+    "data_type": "BIGINT",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_date",
+    "column_name": "month",
+    "data_type": "BIGINT",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_date",
+    "column_name": "day",
+    "data_type": "BIGINT",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_date",
+    "column_name": "day_of_week",
+    "data_type": "BIGINT",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_products",
+    "column_name": "product_id",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_products",
+    "column_name": "product_name",
+    "data_type": "VARCHAR",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_products",
+    "column_name": "category",
+    "data_type": "VARCHAR",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_products",
+    "column_name": "price",
+    "data_type": "DECIMAL(10,2)",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "dim_products",
+    "column_name": "cost",
+    "data_type": "DECIMAL(10,2)",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_inventory",
+    "column_name": "product_id",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_inventory",
+    "column_name": "last_updated",
+    "data_type": "TIMESTAMP",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_inventory",
+    "column_name": "stock_level",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_inventory",
+    "column_name": "warehouse_location",
+    "data_type": "VARCHAR",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales",
+    "column_name": "sale_id",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales",
+    "column_name": "date_key",
+    "data_type": "DATE",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales",
+    "column_name": "customer_id",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales",
+    "column_name": "product_id",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales",
+    "column_name": "quantity",
+    "data_type": "INTEGER",
+    "description": ""
+  },
+  {
+    "schema_name": "main",
+    "table_name": "fact_sales",
+    "column_name": "total_amount",
+    "data_type": "DECIMAL(12,2)",
+    "description": ""
+  }
+]

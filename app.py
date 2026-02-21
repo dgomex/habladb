@@ -22,13 +22,27 @@ from llm_utils import (
 )
 from metadata_utils import (
     DATABASES_DIR,
+    engine_connect_args,
     get_discovered_connections,
     harvest_metadata,
+    is_duckdb_url,
     load_metadata_context,
     metadata_exists,
     normalize_connection_string,
+    path_to_duckdb_url,
     validate_connection,
 )
+
+
+def _ensure_duckdb_dialect() -> None:
+    """Load the DuckDB dialect so SQLAlchemy can resolve duckdb:// URLs."""
+    try:
+        import duckdb_engine  # noqa: F401
+    except ImportError as e:
+        raise ImportError(
+            "DuckDB support requires the duckdb-engine package. "
+            "Install it with: pip install duckdb-engine"
+        ) from e
 
 # Load .env so HABLADB_CONN_* and LLM API keys are available.
 load_dotenv()
@@ -71,12 +85,12 @@ def _execute_sql(connection_string: str, sql: str) -> tuple[pd.DataFrame | None,
     invalid SQL, and other SQLAlchemy/DBAPI errors without crashing the app.
     """
     url = normalize_connection_string(connection_string)
+    if is_duckdb_url(url):
+        _ensure_duckdb_dialect()
+    connect_args = engine_connect_args(url)
+    pool_pre_ping = not is_duckdb_url(url)
     try:
-        engine = create_engine(
-            url,
-            connect_args={"connect_timeout": CONNECT_TIMEOUT},
-            pool_pre_ping=True,
-        )
+        engine = create_engine(url, connect_args=connect_args, pool_pre_ping=pool_pre_ping)
         with engine.connect() as conn:
             result = conn.execute(text(sql))
             rows = result.fetchall()
@@ -89,8 +103,10 @@ def _execute_sql(connection_string: str, sql: str) -> tuple[pd.DataFrame | None,
 
 
 def _dialect_hint(connection_string: str) -> str:
-    """Return 'Redshift' if URL looks like Redshift, else 'PostgreSQL'."""
+    """Return dialect hint for the LLM: Redshift, DuckDB, or PostgreSQL."""
     url = (connection_string or "").lower()
+    if url.startswith("duckdb://"):
+        return "DuckDB"
     if "redshift" in url:
         return "Redshift"
     return "PostgreSQL"
@@ -137,38 +153,71 @@ def main() -> None:
 
         with st.form("new_connection_form"):
             new_name = st.text_input("Connection name", placeholder="e.g. mydb")
-            new_url = st.text_input(
-                "Connection string",
-                placeholder="postgresql://user:pass@host:5432/db (postgres:// also accepted)",
-                type="password",
+            conn_type = st.radio(
+                "Connection type",
+                options=["PostgreSQL / Redshift", "DuckDB"],
+                horizontal=True,
+                key="new_conn_type",
             )
+            if conn_type == "DuckDB":
+                new_path = st.text_input(
+                    "Path to database file",
+                    placeholder="e.g. /path/to/data.duckdb or ./local.duckdb",
+                    key="new_duckdb_path",
+                )
+                new_url = None
+            else:
+                new_path = None
+                new_url = st.text_input(
+                    "Connection string",
+                    placeholder="postgresql://user:pass@host:5432/db (postgres:// also accepted)",
+                    type="password",
+                )
             submitted = st.form_submit_button("Add connection")
             if submitted:
-                if not new_name or not new_url:
-                    st.error("Name and connection string are required.")
-                else:
-                    ok, msg = validate_connection(new_url)
-                    if not ok:
-                        st.error(f"Validation failed: {msg}")
+                if not new_name:
+                    st.error("Connection name is required.")
+                elif conn_type == "DuckDB":
+                    if not new_path or not new_path.strip():
+                        st.error("Path to database file is required.")
                     else:
-                        url_to_save = normalize_connection_string(new_url.strip())
-                        if _persist_connection_to_env(new_name.strip(), url_to_save):
-                            st.success(f"Connection {new_name!r} saved and loaded.")
-                            st.rerun()
+                        url_to_save = path_to_duckdb_url(new_path)
+                        ok, msg = validate_connection(url_to_save)
+                        if not ok:
+                            st.error(f"Validation failed: {msg}")
                         else:
-                            st.error("Could not write to .env.")
+                            if _persist_connection_to_env(new_name.strip(), url_to_save):
+                                st.success(f"Connection {new_name!r} saved and loaded.")
+                                st.rerun()
+                            else:
+                                st.error("Could not write to .env.")
+                else:
+                    if not new_url or not new_url.strip():
+                        st.error("Connection string is required.")
+                    else:
+                        ok, msg = validate_connection(new_url)
+                        if not ok:
+                            st.error(f"Validation failed: {msg}")
+                        else:
+                            url_to_save = normalize_connection_string(new_url.strip())
+                            if _persist_connection_to_env(new_name.strip(), url_to_save):
+                                st.success(f"Connection {new_name!r} saved and loaded.")
+                                st.rerun()
+                            else:
+                                st.error("Could not write to .env.")
 
         if active_conn:
             st.divider()
+            st.caption("Harvest metadata only for the **active connection** selected above.")
             if metadata_exists(active_conn):
-                st.caption(f"Metadata for {active_conn} is cached.")
-            if st.button("Harvest metadata", key="harvest_metadata"):
+                st.caption(f"Metadata for **{active_conn}** is cached.")
+            if st.button(f"Harvest metadata for **{active_conn}**", key="harvest_metadata"):
                 url = conns.get(active_conn)
                 if url:
-                    with st.spinner("Harvesting metadata…"):
+                    with st.spinner(f"Harvesting metadata for {active_conn}…"):
                         try:
                             harvest_metadata(url, active_conn)
-                            st.success("Metadata harvested.")
+                            st.success(f"Metadata harvested for **{active_conn}**.")
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))

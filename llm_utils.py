@@ -32,7 +32,7 @@ PROVIDER_MODELS = {
         "mixtral-8x7b-32768",
     ],
     "gemini": [
-        "gemini/gemini-2.0-flash",
+        "gemini/gemini-2.5-flash",
         "gemini/gemini-1.5-pro",
         "gemini/gemini-1.5-flash",
     ],
@@ -69,7 +69,7 @@ Rules:
 - Output ONLY the SQL query, no explanation before or after.
 - If you need to clarify or the question is ambiguous, still output a best-guess query and a one-line comment starting with -- NOTE: ...
 - Use only schema, table, and column names that appear in the metadata below.
-- Do not use semicolons inside the query unless it is the final statement terminator.
+- Do not use semicolons inside the query unless it is thx§e final statement terminator.
 - Do not ever use a query is not select only, it must be a select statement.
 - Do not execute DML statements, only select statements.
 - Do not execute DDL statements, only select statements.

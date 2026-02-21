@@ -1,0 +1,17 @@
+[
+  {
+    "schema_name": "information_schema"
+  },
+  {
+    "schema_name": "main"
+  },
+  {
+    "schema_name": "main"
+  },
+  {
+    "schema_name": "main"
+  },
+  {
+    "schema_name": "pg_catalog"
+  }
+]

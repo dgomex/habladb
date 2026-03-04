@@ -151,14 +151,21 @@ def main() -> None:
         st.divider()
         st.subheader("Connection management")
 
+        # Radio outside form so changing it triggers a rerun and the correct field/placeholder is shown
+        conn_type = st.radio(
+            "Connection type",
+            options=["PostgreSQL / Redshift", "DuckDB"],
+            horizontal=True,
+            key="new_conn_type",
+        )
+        _prev = st.session_state.get("_new_conn_type_prev")
+        if _prev is not None and _prev != conn_type:
+            st.session_state.pop("new_duckdb_path", None)
+            st.session_state.pop("new_pg_url", None)
+        st.session_state["_new_conn_type_prev"] = conn_type
+
         with st.form("new_connection_form"):
             new_name = st.text_input("Connection name", placeholder="e.g. mydb")
-            conn_type = st.radio(
-                "Connection type",
-                options=["PostgreSQL / Redshift", "DuckDB"],
-                horizontal=True,
-                key="new_conn_type",
-            )
             if conn_type == "DuckDB":
                 new_path = st.text_input(
                     "Path to database file",
@@ -172,6 +179,7 @@ def main() -> None:
                     "Connection string",
                     placeholder="postgresql://user:pass@host:5432/db (postgres:// also accepted)",
                     type="password",
+                    key="new_pg_url",
                 )
             submitted = st.form_submit_button("Add connection")
             if submitted:

@@ -13,8 +13,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 # Default timeout for connection and reflection (seconds).
 
@@ -69,6 +69,16 @@ def is_duckdb_url(url: str) -> bool:
     return (url or "").strip().lower().startswith("duckdb://")
 
 
+def is_redshift_url(url: str) -> bool:
+    """True if the connection URL is for Amazon Redshift (host or port 5439)."""
+    u = (url or "").strip().lower()
+    if "redshift" in u:
+        return True
+    if ":5439/" in u or ":5439?" in u or u.endswith(":5439"):
+        return True
+    return False
+
+
 def engine_connect_args(url: str) -> dict:
     """Connection args for create_engine; DuckDB does not use connect_timeout."""
     if is_duckdb_url(url):
@@ -120,6 +130,119 @@ def _safe_str(value: Any) -> str:
     if hasattr(value, "isoformat"):  # datetime, date
         return value.isoformat()
     return str(value)
+
+
+def _harvest_metadata_postgres(engine: Any, conn_name: str) -> None:
+    """
+    Harvest schemas, tables, and columns from PostgreSQL using information_schema
+    and pg_catalog (pg_description for comments).
+    """
+    schemas_list: list[dict[str, Any]] = []
+    tables_list: list[dict[str, Any]] = []
+    columns_list: list[dict[str, Any]] = []
+
+    with engine.connect() as conn:
+        r = conn.execute(text(
+            "SELECT schema_name FROM information_schema.schemata "
+            "WHERE schema_name NOT IN ('pg_catalog', 'information_schema') "
+            "ORDER BY schema_name"
+        ))
+        for row in r:
+            schemas_list.append({"schema_name": row[0]})
+
+        r = conn.execute(text("""
+            SELECT table_schema, table_name
+            FROM information_schema.tables
+            WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+              AND table_type IN ('BASE TABLE', 'VIEW')
+            ORDER BY table_schema, table_name
+        """))
+        for row in r:
+            tables_list.append({"schema_name": row[0], "table_name": row[1]})
+
+        r = conn.execute(text("""
+            SELECT c.table_schema, c.table_name, c.column_name, c.data_type,
+                   COALESCE(d.description, '') AS description
+            FROM information_schema.columns c
+            LEFT JOIN (
+                SELECT n.nspname AS table_schema, c.relname AS table_name, a.attname AS column_name,
+                       pg_catalog.col_description(c.oid, a.attnum) AS description
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid
+                WHERE a.attnum > 0 AND NOT a.attisdropped
+            ) d ON d.table_schema = c.table_schema AND d.table_name = c.table_name AND d.column_name = c.column_name
+            WHERE c.table_schema NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY c.table_schema, c.table_name, c.ordinal_position
+        """))
+        for row in r:
+            columns_list.append({
+                "schema_name": row[0],
+                "table_name": row[1],
+                "column_name": row[2],
+                "data_type": _safe_str(row[3]),
+                "description": _safe_str(row[4]) if len(row) > 4 else "",
+            })
+
+    for filename, data in (
+        (f"{conn_name}_schemas.json", schemas_list),
+        (f"{conn_name}_tables.json", tables_list),
+        (f"{conn_name}_columns.json", columns_list),
+    ):
+        path = DATABASES_DIR / filename
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _harvest_metadata_redshift(engine: Any, conn_name: str) -> None:
+    """
+    Harvest schemas, tables, and columns from Amazon Redshift using
+    SVV_TABLES and SVV_COLUMNS (Redshift-specific system views).
+    """
+    schemas_list: list[dict[str, Any]] = []
+    tables_list: list[dict[str, Any]] = []
+    columns_list: list[dict[str, Any]] = []
+
+    with engine.connect() as conn:
+        r = conn.execute(text("""
+            SELECT DISTINCT table_schema
+            FROM SVV_TABLES
+            ORDER BY table_schema
+        """))
+        for row in r:
+            schemas_list.append({"schema_name": row[0]})
+
+        r = conn.execute(text("""
+            SELECT table_schema, table_name, COALESCE(remarks, '') AS remarks
+            FROM SVV_TABLES
+            ORDER BY table_schema, table_name
+        """))
+        for row in r:
+            tables_list.append({"schema_name": row[0], "table_name": row[1]})
+
+        r = conn.execute(text("""
+            SELECT table_schema, table_name, column_name, data_type, ordinal_position,
+                   COALESCE(remarks, '') AS remarks
+            FROM SVV_COLUMNS
+            ORDER BY table_schema, table_name, ordinal_position
+        """))
+        for row in r:
+            columns_list.append({
+                "schema_name": row[0],
+                "table_name": row[1],
+                "column_name": row[2],
+                "data_type": _safe_str(row[3]),
+                "description": _safe_str(row[5]) if len(row) > 5 else "",
+            })
+
+    for filename, data in (
+        (f"{conn_name}_schemas.json", schemas_list),
+        (f"{conn_name}_tables.json", tables_list),
+        (f"{conn_name}_columns.json", columns_list),
+    ):
+        path = DATABASES_DIR / filename
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
 
 def _harvest_metadata_duckdb(engine: Any, conn_name: str) -> None:
@@ -181,8 +304,8 @@ def harvest_metadata(connection_string: str, conn_name: str) -> None:
     """
     Extract schemas, tables, and columns from the database and persist them
     under databases/{conn_name}_schemas.json, _tables.json, _columns.json.
-    Raises on connection or reflection errors; handles timeouts via connect_args.
-    For DuckDB, uses information_schema (not the PostgreSQL-style Inspector).
+    Uses database-appropriate system tables: PostgreSQL (information_schema +
+    pg_catalog), Redshift (SVV_TABLES, SVV_COLUMNS), DuckDB (information_schema).
     """
     DATABASES_DIR.mkdir(parents=True, exist_ok=True)
     url = normalize_connection_string(connection_string)
@@ -195,60 +318,10 @@ def harvest_metadata(connection_string: str, conn_name: str) -> None:
 
     if is_duckdb_url(url):
         _harvest_metadata_duckdb(engine, conn_name)
-        return
-
-    inspector = inspect(engine)
-    schemas_list: list[dict[str, Any]] = []
-    tables_list: list[dict[str, Any]] = []
-    columns_list: list[dict[str, Any]] = []
-
-    try:
-        schema_names = inspector.get_schema_names()
-    except (DBAPIError, SQLAlchemyError) as e:
-        raise RuntimeError(f"Failed to list schemas: {e}") from e
-
-    for schema in schema_names:
-        schemas_list.append({"schema_name": schema})
-
-        try:
-            table_names = inspector.get_table_names(schema=schema)
-        except (DBAPIError, SQLAlchemyError) as e:
-            raise RuntimeError(f"Failed to list tables in schema {schema!r}: {e}") from e
-
-        for table in table_names:
-            tables_list.append({
-                "schema_name": schema,
-                "table_name": table,
-            })
-
-            try:
-                cols = inspector.get_columns(table, schema=schema)
-            except (DBAPIError, SQLAlchemyError) as e:
-                raise RuntimeError(
-                    f"Failed to get columns for {schema}.{table}: {e}"
-                ) from e
-
-            for col in cols:
-                col_type = col.get("type")
-                type_str = _safe_str(getattr(col_type, "python_type", col_type))
-                if hasattr(col_type, "__visit_name__"):
-                    type_str = getattr(col_type, "__visit_name__", type_str)
-                columns_list.append({
-                    "schema_name": schema,
-                    "table_name": table,
-                    "column_name": col["name"],
-                    "data_type": type_str,
-                    "description": _safe_str(col.get("comment") or ""),
-                })
-
-    for filename, data in (
-        (f"{conn_name}_schemas.json", schemas_list),
-        (f"{conn_name}_tables.json", tables_list),
-        (f"{conn_name}_columns.json", columns_list),
-    ):
-        path = DATABASES_DIR / filename
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+    elif is_redshift_url(url):
+        _harvest_metadata_redshift(engine, conn_name)
+    else:
+        _harvest_metadata_postgres(engine, conn_name)
 
 
 def load_metadata_context(conn_name: str) -> str:

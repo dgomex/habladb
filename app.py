@@ -154,7 +154,7 @@ def main() -> None:
         # Radio outside form so changing it triggers a rerun and the correct field/placeholder is shown
         conn_type = st.radio(
             "Connection type",
-            options=["PostgreSQL / Redshift", "DuckDB"],
+            options=["PostgreSQL", "Redshift", "DuckDB"],
             horizontal=True,
             key="new_conn_type",
         )
@@ -175,9 +175,14 @@ def main() -> None:
                 new_url = None
             else:
                 new_path = None
+                _placeholder = (
+                    "postgresql://user:pass@cluster.region.redshift.amazonaws.com:5439/dev"
+                    if conn_type == "Redshift"
+                    else "postgresql://user:pass@host:5432/db (postgres:// also accepted)"
+                )
                 new_url = st.text_input(
                     "Connection string",
-                    placeholder="postgresql://user:pass@host:5432/db (postgres:// also accepted)",
+                    placeholder=_placeholder,
                     type="password",
                     key="new_pg_url",
                 )
